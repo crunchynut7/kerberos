@@ -4,6 +4,7 @@ import com.bossarena.engine.ActiveHazard;
 import com.bossarena.engine.Arena;
 import com.bossarena.engine.ArenaEngine;
 import com.bossarena.engine.Entity;
+import com.bossarena.engine.FloorTheme;
 import com.bossarena.engine.Hitsplat;
 import com.bossarena.engine.PlayerEntity;
 import com.bossarena.engine.Projectile;
@@ -15,14 +16,20 @@ import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Polygon;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Shape;
+import java.awt.geom.Area;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.inject.Inject;
 import net.runelite.api.Client;
 import net.runelite.api.Perspective;
+import net.runelite.api.Player;
 import net.runelite.api.Point;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.client.ui.FontManager;
@@ -48,12 +55,7 @@ class ArenaOverlay extends Overlay
 	private static final BasicStroke THIN = new BasicStroke(1);
 	private static final BasicStroke THICK = new BasicStroke(2);
 	private static final int HEALTH_BAR_HEIGHT = 5;
-	private static final Color PROP_OUTLINE = new Color(20, 20, 20);
-	private static final Color PROP_LIT_OUTLINE = new Color(255, 241, 118);
 	private static final int PROP_HEIGHT = 110;
-	/** A shield outline, centred on the origin. */
-	private static final int[] SHIELD_X = {-20, 20, 20, 0, -20};
-	private static final int[] SHIELD_Y = {-24, -24, 6, 24, 6};
 	private static final int[][] SPLAT_OFFSETS = {{0, 0}, {0, -20}, {-16, -10}, {16, -10}};
 
 	private final Client client;
@@ -82,11 +84,16 @@ class ArenaOverlay extends Overlay
 		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		double progress = session.progress();
 
+		// The floor and scenery are painted over the game view, so cut the characters' outlines out
+		// of them first; otherwise the paving would cover whoever stands on it.
+		Shape clip = graphics.getClip();
+		graphics.setClip(sceneryClip(session, clip));
 		renderTiles(graphics, session);
 		for (Prop prop : session.getEngine().getProps())
 		{
 			renderProp(graphics, session, prop);
 		}
+		graphics.setClip(clip);
 		for (ActorVisual visual : session.getVisuals().values())
 		{
 			renderActor(graphics, session, visual, progress);
@@ -98,11 +105,36 @@ class ArenaOverlay extends Overlay
 		return null;
 	}
 
+	/** Everything on screen except the characters. */
+	private Shape sceneryClip(ArenaSession session, Shape current)
+	{
+		Area area = new Area(current != null
+			? current
+			: new Rectangle(0, 0, client.getCanvasWidth(), client.getCanvasHeight()));
+		for (ActorVisual visual : session.getVisuals().values())
+		{
+			Shape hull = visual.hull();
+			if (hull != null)
+			{
+				area.subtract(new Area(hull));
+			}
+		}
+		Player local = client.getLocalPlayer();
+		Shape hull = local == null ? null : local.getConvexHull();
+		if (hull != null)
+		{
+			area.subtract(new Area(hull));
+		}
+		return area;
+	}
+
 	private void renderTiles(Graphics2D graphics, ArenaSession session)
 	{
 		ArenaEngine engine = session.getEngine();
 		Arena arena = engine.getArena();
 		ArenaView view = session.getView();
+		FloorTheme theme = arena.getTheme();
+		List<ArenaScenery.WallBlock> walls = new ArrayList<>();
 		Map<Tile, Integer> paint = arena.getPaint();
 		Map<Tile, Integer> hazardColours = hazardColours(engine);
 		Tile destination = engine.getPlayer().getDestination();
@@ -123,21 +155,43 @@ class ArenaOverlay extends Overlay
 				{
 					continue;
 				}
-				if (arena.isBlocked(tile))
+				if (arena.isWall(tile))
 				{
-					graphics.setColor(WALL);
-					graphics.fill(polygon);
+					ArenaScenery.WallBlock wall = theme == null
+						? null
+						: ArenaScenery.wallBlock(projector(local, view.plane()), local.getX(), local.getY(), theme);
+					if (wall != null)
+					{
+						walls.add(wall);
+					}
+					else
+					{
+						graphics.setColor(WALL);
+						graphics.fill(polygon);
+					}
 					continue;
 				}
-				Integer fill = hazardColours.get(tile);
-				if (fill == null)
+
+				Integer tint = paint.get(tile);
+				if (theme != null)
 				{
-					fill = paint.get(tile);
+					ArenaScenery.drawPaving(graphics, polygon, tile, theme, tint);
 				}
-				if (fill != null)
+				else if (tint != null)
 				{
-					graphics.setColor(new Color(fill, true));
+					graphics.setColor(new Color(tint, true));
 					graphics.fill(polygon);
+				}
+				Integer hazard = hazardColours.get(tile);
+				if (hazard != null)
+				{
+					graphics.setColor(new Color(hazard, true));
+					graphics.fill(polygon);
+				}
+				if (arena.isBlocked(tile))
+				{
+					// Floor under a prop: drawn, but not somewhere to walk.
+					continue;
 				}
 				if (config.showGrid())
 				{
@@ -155,6 +209,13 @@ class ArenaOverlay extends Overlay
 					destinationPolygon = polygon;
 				}
 			}
+		}
+
+		// Furthest first, so nearer blocks overlap the ones behind them.
+		walls.sort(Comparator.comparingInt(ArenaScenery.WallBlock::depth));
+		for (ArenaScenery.WallBlock wall : walls)
+		{
+			ArenaScenery.drawWall(graphics, wall, theme);
 		}
 
 		graphics.setStroke(THICK);
@@ -331,32 +392,28 @@ class ArenaOverlay extends Overlay
 		return entity != null ? ArenaView.centre(entity, progress) : new double[]{tile.getX(), tile.getY()};
 	}
 
-	/** Draws a prop as an upright shield: dim when unlit, coloured when lit, white while flashing. */
+	/** Draws a prop as an upright shield: dull when unlit, coloured and glowing when lit, white while flashing. */
 	private void renderProp(Graphics2D graphics, ArenaSession session, Prop prop)
 	{
 		LocalPoint local = session.getView().toLocal(client, prop.getTile(), 1);
-		Point point = local == null ? null : Perspective.localToCanvas(client, local, session.getView().plane(), PROP_HEIGHT);
-		if (point == null)
+		if (local == null)
 		{
 			return;
 		}
-		Polygon shield = new Polygon(SHIELD_X, SHIELD_Y, SHIELD_X.length);
-		shield.translate(point.getX(), point.getY());
-
 		boolean flashing = session.getEngine().getTick() < prop.getFlashUntilTick();
-		int rgb = prop.getArgb() & 0xFFFFFF;
-		Color fill = flashing ? Color.WHITE : new Color((prop.isLit() ? 0xE0000000 : 0x50000000) | rgb, true);
-		graphics.setColor(fill);
-		graphics.fill(shield);
-		graphics.setColor(prop.isLit() || flashing ? PROP_LIT_OUTLINE : PROP_OUTLINE);
-		graphics.setStroke(prop.isLit() || flashing ? new BasicStroke(3) : THICK);
-		graphics.draw(shield);
-
 		BufferedImage icon = prop.getIcon() == null ? null : plugin.prayerIcon(prop.getIcon());
-		if (icon != null)
+		ArenaScenery.drawShield(graphics, projector(local, session.getView().plane()), local.getX(), local.getY(),
+			client.getCameraY() < local.getY(), prop.getArgb(), icon, prop.isLit(), flashing);
+	}
+
+	/** Projects scene positions in the same world view as {@code near} onto the screen. */
+	private ArenaScenery.Projector projector(LocalPoint near, int plane)
+	{
+		return (x, y, height) ->
 		{
-			graphics.drawImage(icon, point.getX() - icon.getWidth() / 2, point.getY() - icon.getHeight() / 2 - 3, null);
-		}
+			Point point = Perspective.localToCanvas(client, new LocalPoint(x, y, near.getWorldView()), plane, height);
+			return point == null ? null : new java.awt.Point(point.getX(), point.getY());
+		};
 	}
 
 	private static int heightOf(ArenaSession session, Entity entity)

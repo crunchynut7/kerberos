@@ -7,6 +7,7 @@ import com.bossarena.engine.Boss;
 import com.bossarena.engine.CombatStats;
 import com.bossarena.engine.Encounter;
 import com.bossarena.engine.EntityVisual;
+import com.bossarena.engine.FloorTheme;
 import com.bossarena.engine.Prayer;
 import com.bossarena.engine.Prop;
 import com.bossarena.engine.Tile;
@@ -129,6 +130,7 @@ public class KerberosEncounter implements Encounter
 			".......",
 			"...P...",
 			".......");
+		arena.setTheme(FloorTheme.builder().build());
 		for (Attack attack : Attack.values())
 		{
 			if (attack.isSlam())

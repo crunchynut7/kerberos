@@ -2,13 +2,16 @@ package com.bossarena;
 
 import com.bossarena.engine.Entity;
 import com.bossarena.engine.Tile;
+import java.awt.Shape;
 import java.util.List;
 import lombok.Getter;
 import net.runelite.api.Animation;
 import net.runelite.api.AnimationController;
 import net.runelite.api.Client;
 import net.runelite.api.Model;
+import net.runelite.api.Perspective;
 import net.runelite.api.RuneLiteObject;
+import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
 
 /**
@@ -83,6 +86,27 @@ class ActorVisual
 		updatePose();
 		updateAnimation();
 		object.setActive(true);
+	}
+
+	/**
+	 * The outline of the drawn model on screen, so floor art can be kept from painting over it.
+	 *
+	 * @return null if nothing is drawn
+	 */
+	Shape hull()
+	{
+		if (object == null || !object.isActive())
+		{
+			return null;
+		}
+		Model model = object.getModel();
+		WorldView worldView = client.getTopLevelWorldView();
+		if (model == null || worldView == null)
+		{
+			return null;
+		}
+		return Perspective.getClickbox(client, worldView, model, object.getOrientation(),
+			object.getX(), object.getY(), object.getZ());
 	}
 
 	void remove()
