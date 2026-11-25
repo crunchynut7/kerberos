@@ -1,5 +1,6 @@
 package com.bossarena;
 
+import com.bossarena.encounters.KerberosEncounter;
 import com.bossarena.engine.ActiveHazard;
 import com.bossarena.engine.Arena;
 import com.bossarena.engine.ArenaEngine;
@@ -56,6 +57,8 @@ class ArenaOverlay extends Overlay
 	private static final BasicStroke THICK = new BasicStroke(2);
 	private static final int HEALTH_BAR_HEIGHT = 5;
 	private static final int PROP_HEIGHT = 110;
+	/** How far apart, in scene units, the two points used to measure a projectile's on-screen size are. */
+	private static final int SCALE_PROBE = 64;
 	private static final int[][] SPLAT_OFFSETS = {{0, 0}, {0, -20}, {-16, -10}, {16, -10}};
 
 	private final Client client;
@@ -89,10 +92,13 @@ class ArenaOverlay extends Overlay
 		Shape clip = graphics.getClip();
 		graphics.setClip(sceneryClip(session, clip));
 		renderTiles(graphics, session);
+		// Hand-drawn figures the camera is in front of go behind the props, and the rest go over them.
+		renderFigures(graphics, session, progress, true);
 		for (Prop prop : session.getEngine().getProps())
 		{
 			renderProp(graphics, session, prop);
 		}
+		renderFigures(graphics, session, progress, false);
 		graphics.setClip(clip);
 		for (ActorVisual visual : session.getVisuals().values())
 		{
@@ -103,6 +109,32 @@ class ArenaOverlay extends Overlay
 			renderProjectile(graphics, session, projectile, progress);
 		}
 		return null;
+	}
+
+	/**
+	 * Draws the entities that are hand-drawn figures and not models.
+	 *
+	 * @param cameraSouth draw only the figures the camera is south of, or only the ones it is north of
+	 */
+	private void renderFigures(Graphics2D graphics, ArenaSession session, double progress, boolean cameraSouth)
+	{
+		for (ActorVisual visual : session.getVisuals().values())
+		{
+			Entity entity = visual.getEntity();
+			if (entity.isDead() || !KerberosEncounter.ART.equals(entity.getVisual().getArt()))
+			{
+				continue;
+			}
+			double[] at = ArenaView.interpolate(entity, progress);
+			LocalPoint local = session.getView().toLocal(client, at[0], at[1], entity.getSize());
+			if (local == null || (client.getCameraY() < local.getY()) != cameraSouth)
+			{
+				continue;
+			}
+			KerberosArt.draw(graphics, projector(local, session.getView().plane()), local.getX(), local.getY(), cameraSouth,
+				entity.getPose(KerberosEncounter.HEADS), entity.getPose(KerberosEncounter.PAWS),
+				session.getEngine().getTick() + progress);
+		}
 	}
 
 	/** Everything on screen except the characters. */
@@ -363,27 +395,36 @@ class ArenaOverlay extends Overlay
 		}
 		double[] from = end(projectile.getSource(), projectile.getSourceTile(), progress);
 		double[] to = end(projectile.getTarget(), projectile.getTargetTile(), progress);
+		double fromHeight = projectile.getSource() == null ? PROP_HEIGHT : heightOf(session, projectile.getSource()) * 0.6;
+		double toHeight = projectile.getTarget() == null ? PROP_HEIGHT : heightOf(session, projectile.getTarget()) * 0.5;
+
+		// Where it is now, a moment further on (for its heading) and a little higher up (for its size).
+		Point here = flightPoint(session, from, to, fromHeight, toHeight, flown, 0);
+		Point ahead = flightPoint(session, from, to, fromHeight, toHeight, Math.min(1, flown + 0.05), 0);
+		Point above = flightPoint(session, from, to, fromHeight, toHeight, flown, SCALE_PROBE);
+		if (here == null || ahead == null || above == null)
+		{
+			return;
+		}
+		double scale = Math.hypot(above.getX() - here.getX(), above.getY() - here.getY()) / SCALE_PROBE;
+		ProjectileArt.draw(graphics, projectile.getStyle(), projectile.getArgb(), here.getX(), here.getY(),
+			ahead.getX() - here.getX(), ahead.getY() - here.getY(), scale, tick + progress);
+	}
+
+	/** The screen position of a point part-way along a projectile's flight, raised by {@code lift}. */
+	private Point flightPoint(ArenaSession session, double[] from, double[] to, double fromHeight, double toHeight,
+		double flown, int lift)
+	{
 		LocalPoint local = session.getView().toLocal(client,
 			from[0] + (to[0] - from[0]) * flown,
 			from[1] + (to[1] - from[1]) * flown,
 			1);
 		if (local == null)
 		{
-			return;
+			return null;
 		}
-		double fromHeight = projectile.getSource() == null ? PROP_HEIGHT : heightOf(session, projectile.getSource()) * 0.6;
-		double toHeight = projectile.getTarget() == null ? PROP_HEIGHT : heightOf(session, projectile.getTarget()) * 0.5;
-		int height = (int) (fromHeight + (toHeight - fromHeight) * flown);
-		Point point = Perspective.localToCanvas(client, local, session.getView().plane(), height);
-		if (point == null)
-		{
-			return;
-		}
-		graphics.setColor(new Color(projectile.getArgb(), true));
-		graphics.fillOval(point.getX() - 8, point.getY() - 8, 16, 16);
-		graphics.setColor(Color.BLACK);
-		graphics.setStroke(THIN);
-		graphics.drawOval(point.getX() - 8, point.getY() - 8, 16, 16);
+		int height = (int) (fromHeight + (toHeight - fromHeight) * flown) + lift;
+		return Perspective.localToCanvas(client, local, session.getView().plane(), height);
 	}
 
 	/** One end of a projectile in arena coordinates: the entity if it has one, otherwise the tile. */

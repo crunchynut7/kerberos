@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import lombok.Getter;
-import net.runelite.api.gameval.NpcID;
 
 /**
  * Kerberos: a memory fight. The boss shows a sequence of cues, pauses, then performs the attacks
@@ -34,13 +33,12 @@ public class KerberosEncounter implements Encounter
 {
 	public enum Attack
 	{
-		MELEE("Melee", AttackStyle.MELEE, Prayer.PROTECT_FROM_MELEE, 1, 0xFFE53935),
-		MAGIC("Magic", AttackStyle.MAGIC, Prayer.PROTECT_FROM_MAGIC, 3, 0xFF1E88E5),
-		RANGED("Ranged", AttackStyle.RANGED, Prayer.PROTECT_FROM_MISSILES, 5, 0xFF43A047),
-		SLAM_LEFT("Slam left", null, null, -1, 0xFFFB8C00),
-		SLAM_RIGHT("Slam right", null, null, -1, 0xFFFB8C00);
+		MELEE(AttackStyle.MELEE, Prayer.PROTECT_FROM_MELEE, 1, 0xFFE53935),
+		MAGIC(AttackStyle.MAGIC, Prayer.PROTECT_FROM_MAGIC, 3, 0xFF1E88E5),
+		RANGED(AttackStyle.RANGED, Prayer.PROTECT_FROM_MISSILES, 5, 0xFF43A047),
+		SLAM_LEFT(null, null, -1, 0xFFFB8C00),
+		SLAM_RIGHT(null, null, -1, 0xFFFB8C00);
 
-		private final String cue;
 		/** Null for slams. */
 		@Getter
 		private final AttackStyle style;
@@ -48,11 +46,11 @@ public class KerberosEncounter implements Encounter
 		private final Prayer prayer;
 		/** The lane's column, or -1 for slams. */
 		private final int lane;
+		@Getter
 		private final int argb;
 
-		Attack(String cue, AttackStyle style, Prayer prayer, int lane, int argb)
+		Attack(AttackStyle style, Prayer prayer, int lane, int argb)
 		{
-			this.cue = cue;
 			this.style = style;
 			this.prayer = prayer;
 			this.lane = lane;
@@ -89,6 +87,19 @@ public class KerberosEncounter implements Encounter
 	static final int HEAD_DAMAGE = 40;
 	static final int SLAM_DAMAGE = 40;
 
+	// ---- What the renderer needs to know to draw the boss ----
+
+	/** The name of Kerberos's hand-drawn figure. */
+	public static final String ART = "kerberos";
+	/** The part that rears and spits; poses on it are named REAR or SPIT plus an {@link Attack} name. */
+	public static final String HEADS = "heads";
+	/** The part that scrapes and slams; poses on it are named SCRAPE or SLAM plus an {@link Attack} name. */
+	public static final String PAWS = "paws";
+	public static final String REAR = "rear:";
+	public static final String SPIT = "spit:";
+	public static final String SCRAPE = "scrape:";
+	public static final String SLAM = "slam:";
+
 	// ---- Layout ----
 
 	private static final int WIDTH = 7;
@@ -121,12 +132,12 @@ public class KerberosEncounter implements Encounter
 			".......",
 			"..B....",
 			".......",
-			"#.#.#.#",
-			"#.#.#.#",
-			"#.#.#.#",
-			"#.#.#.#",
-			"#.#.#.#",
-			"#.#.#.#",
+			".......",
+			".......",
+			".......",
+			".......",
+			".......",
+			".......",
 			".......",
 			"...P...",
 			".......");
@@ -177,7 +188,7 @@ public class KerberosEncounter implements Encounter
 
 		Boss kerberos = engine.spawnBoss(name(), 3, 600, engine.getArena().marker('B'));
 		kerberos.setVisual(EntityVisual.builder()
-			.npcId(NpcID.HELLHOUND)
+			.art(ART)
 			.markerArgb(0xFFB71C1C)
 			.build());
 		kerberos.setBehaviour(this::bossTick);
@@ -259,7 +270,12 @@ public class KerberosEncounter implements Encounter
 			int lands = firstLanding + i * ATTACK_INTERVAL;
 			landing.put(lands, attack);
 			at(now + i * CUE_TICKS, () -> showCue(engine, kerberos, attack));
-			at(lands - TRAVEL_TICKS, () -> launch(engine, attack));
+			at(lands - TRAVEL_TICKS, () -> launch(engine, kerberos, attack));
+			if (attack.isSlam())
+			{
+				// The paw goes up a tick early and comes down as the slam lands.
+				at(lands - 1, () -> kerberos.pose(PAWS, SLAM + attack.name(), lands - 1, lands + 1));
+			}
 			at(lands, () -> land(engine, attack));
 		}
 		at(firstLanding + (length - 1) * ATTACK_INTERVAL + REST_TICKS, () -> beginSequence(engine, kerberos));
@@ -268,7 +284,8 @@ public class KerberosEncounter implements Encounter
 	/** Shows which attack is coming: a head rearing over its lane, or a foot scraping one side. */
 	private void showCue(ArenaEngine engine, Boss kerberos, Attack attack)
 	{
-		kerberos.say(attack.cue, engine.getTick() + 1);
+		int now = engine.getTick();
+		kerberos.pose(attack.isSlam() ? PAWS : HEADS, (attack.isSlam() ? SCRAPE : REAR) + attack.name(), now, now + 1);
 		TileHazard.TileHazardBuilder flash = TileHazard.builder()
 			.warningTicks(0)
 			.activeTicks(1)
@@ -295,11 +312,13 @@ public class KerberosEncounter implements Encounter
 		engine.addHazard(flash.build());
 	}
 
-	private void launch(ArenaEngine engine, Attack attack)
+	private void launch(ArenaEngine engine, Boss kerberos, Attack attack)
 	{
 		if (!attack.isSlam())
 		{
-			engine.launchProjectile(new Tile(attack.lane, APRON_ROW), new Tile(attack.lane, SHIELD_ROW), TRAVEL_TICKS, attack.argb);
+			kerberos.pose(HEADS, SPIT + attack.name(), engine.getTick(), engine.getTick() + 1);
+			engine.launchProjectile(new Tile(attack.lane, APRON_ROW), new Tile(attack.lane, SHIELD_ROW), attack.style,
+				TRAVEL_TICKS, attack.argb);
 		}
 	}
 
@@ -315,7 +334,7 @@ public class KerberosEncounter implements Encounter
 				.activeArgb(0xA0000000 | (attack.argb & 0xFFFFFF));
 			for (int x = 0; x < WIDTH; x++)
 			{
-				for (int y = 0; y <= APRON_ROW; y++)
+				for (int y = 0; y < engine.getArena().getHeight(); y++)
 				{
 					Tile tile = new Tile(x, y);
 					if (attack.hitsColumn(x) && !engine.getArena().isBlocked(tile))
@@ -335,7 +354,7 @@ public class KerberosEncounter implements Encounter
 			return;
 		}
 		// The shield was down, so the attack carries on to the player and hits a tick later.
-		engine.launchProjectile(shield.getTile(), engine.getPlayer(), 1, attack.argb);
+		engine.launchProjectile(shield.getTile(), engine.getPlayer(), attack.style, 1, attack.argb);
 		at(engine.getTick() + 1, () -> engine.damagePlayer(HEAD_DAMAGE));
 	}
 }

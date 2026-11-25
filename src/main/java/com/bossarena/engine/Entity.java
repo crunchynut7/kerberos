@@ -2,7 +2,9 @@ package com.bossarena.engine;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -31,6 +33,7 @@ public abstract class Entity
 	private int animation = -1;
 	/** Incremented each time an animation is requested, so the same animation can replay. */
 	private int animationSequence;
+	private final Map<String, Pose> poses = new HashMap<>();
 	private String overheadText;
 	/** The first tick {@link #getOverheadText()} is no longer shown on. */
 	private int overheadTextUntilTick;
@@ -83,6 +86,24 @@ public abstract class Entity
 	{
 		int high = low + size - 1;
 		return Math.max(0, Math.max(low - value, value - high));
+	}
+
+	/**
+	 * Starts a pose on one part of the entity. Each part holds one pose at a time, so a boss can,
+	 * say, rear a head while a leg is doing something else.
+	 *
+	 * @param part     which part of the entity is posing, e.g. "head"
+	 * @param untilTick the first tick the pose is over on
+	 */
+	public void pose(String part, String name, int fromTick, int untilTick)
+	{
+		poses.put(part, new Pose(name, fromTick, untilTick));
+	}
+
+	/** The pose last started on a part, which may already be over, or null. */
+	public Pose getPose(String part)
+	{
+		return poses.get(part);
 	}
 
 	/** Shows text above the entity until the given tick. */

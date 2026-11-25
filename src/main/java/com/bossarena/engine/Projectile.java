@@ -15,6 +15,8 @@ public class Projectile
 	/** The entity it flies to, or null if it flies to {@link #targetTile}. */
 	Entity target;
 	Tile targetTile;
+	/** What kind of attack it is, which decides how it is drawn; null for a plain orb. */
+	AttackStyle style;
 	int launchTick;
 	int landTick;
 	int argb;

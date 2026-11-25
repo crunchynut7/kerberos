@@ -63,6 +63,19 @@ class ActorVisual
 		}
 	}
 
+	/** For an entity the overlay draws by hand: there is no model, only a height to hang the health bar from. */
+	ActorVisual(Client client, Entity entity, int height)
+	{
+		this.client = client;
+		this.entity = entity;
+		this.object = null;
+		this.idleAnimation = -1;
+		this.walkAnimation = -1;
+		this.runAnimation = -1;
+		this.height = height;
+		this.animationSequence = entity.getAnimationSequence();
+	}
+
 	/**
 	 * @param progress how far through the current engine tick we are, from 0 to 1
 	 */

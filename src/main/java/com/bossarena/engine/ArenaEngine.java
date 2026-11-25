@@ -134,7 +134,7 @@ public class ArenaEngine
 		pendingHits.add(new PendingHit(player, style, damage, landTick, check, protectedAtLaunch));
 		if (style != AttackStyle.MELEE && landTick > tick)
 		{
-			projectiles.add(new Projectile(source, null, player, null, tick, landTick, projectileColour(style)));
+			projectiles.add(new Projectile(source, null, player, null, style, tick, landTick, projectileColour(style)));
 		}
 	}
 
@@ -161,15 +161,15 @@ public class ArenaEngine
 	}
 
 	/** Shows a projectile flying between two tiles. It is visual only. */
-	public void launchProjectile(Tile from, Tile to, int travelTicks, int argb)
+	public void launchProjectile(Tile from, Tile to, AttackStyle style, int travelTicks, int argb)
 	{
-		projectiles.add(new Projectile(null, from, null, to, tick, tick + Math.max(1, travelTicks), argb));
+		projectiles.add(new Projectile(null, from, null, to, style, tick, tick + Math.max(1, travelTicks), argb));
 	}
 
 	/** Shows a projectile flying from a tile to an entity. It is visual only. */
-	public void launchProjectile(Tile from, Entity to, int travelTicks, int argb)
+	public void launchProjectile(Tile from, Entity to, AttackStyle style, int travelTicks, int argb)
 	{
-		projectiles.add(new Projectile(null, from, to, null, tick, tick + Math.max(1, travelTicks), argb));
+		projectiles.add(new Projectile(null, from, to, null, style, tick, tick + Math.max(1, travelTicks), argb));
 	}
 
 	public Prop addProp(Prop prop)
@@ -434,7 +434,7 @@ public class ArenaEngine
 		pendingHits.add(new PendingHit(target, stats.getAttackStyle(), damage, landTick, PrayerCheck.ON_HIT, false));
 		if (stats.getAttackStyle() != AttackStyle.MELEE)
 		{
-			projectiles.add(new Projectile(player, null, target, null, tick, landTick,
+			projectiles.add(new Projectile(player, null, target, null, stats.getAttackStyle(), tick, landTick,
 				projectileColour(stats.getAttackStyle())));
 		}
 		if (stats.getAttackAnimation() != -1)

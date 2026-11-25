@@ -11,6 +11,11 @@ import lombok.Value;
 @Builder
 public class EntityVisual
 {
+	/**
+	 * The name of a hand-drawn figure the renderer knows how to draw, or null. When set, the entity
+	 * has no model and the NPC and animation ids are ignored.
+	 */
+	String art;
 	/** NPC whose model is borrowed for this entity, or -1 to use the local player's model. */
 	@Builder.Default
 	int npcId = -1;

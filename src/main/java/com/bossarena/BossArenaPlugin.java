@@ -1,5 +1,6 @@
 package com.bossarena;
 
+import com.bossarena.encounters.KerberosEncounter;
 import com.bossarena.engine.ArenaEngine;
 import com.bossarena.engine.Boss;
 import com.bossarena.engine.Encounter;
@@ -250,6 +251,11 @@ public class BossArenaPlugin extends Plugin
 	private ActorVisual createVisual(Entity entity)
 	{
 		EntityVisual visual = entity.getVisual();
+		if (visual.getArt() != null)
+		{
+			int height = KerberosEncounter.ART.equals(visual.getArt()) ? KerberosArt.HEIGHT : 180 * entity.getSize();
+			return new ActorVisual(client, entity, height);
+		}
 		if (visual.getNpcId() != -1)
 		{
 			return new ActorVisual(client, entity, loadNpcModel(visual.getNpcId()),

@@ -35,6 +35,8 @@ While the mouse is over the arena, world clicks are consumed and go to the arena
   - `KerberosEncounter` is a memory fight: the boss shows a sequence of cues, pauses, then performs
     the attacks in order. Head attacks travel down a lane and are stopped by that lane's shield
     only while the matching protection prayer is up; slams cover the left or right four columns.
+    Kerberos is drawn by hand in `KerberosArt`: a head rears to cue its attack and a paw scrapes to
+    cue a slam on that side.
     Its timings and damage are constants at the top of the class.
   - `SparringGolemEncounter` is a simple placeholder for trying the engine out.
 
