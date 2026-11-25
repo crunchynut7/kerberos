@@ -7,6 +7,7 @@ import com.bossarena.engine.Entity;
 import com.bossarena.engine.Hitsplat;
 import com.bossarena.engine.PlayerEntity;
 import com.bossarena.engine.Projectile;
+import com.bossarena.engine.Prop;
 import com.bossarena.engine.Tile;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -47,6 +48,12 @@ class ArenaOverlay extends Overlay
 	private static final BasicStroke THIN = new BasicStroke(1);
 	private static final BasicStroke THICK = new BasicStroke(2);
 	private static final int HEALTH_BAR_HEIGHT = 5;
+	private static final Color PROP_OUTLINE = new Color(20, 20, 20);
+	private static final Color PROP_LIT_OUTLINE = new Color(255, 241, 118);
+	private static final int PROP_HEIGHT = 110;
+	/** A shield outline, centred on the origin. */
+	private static final int[] SHIELD_X = {-20, 20, 20, 0, -20};
+	private static final int[] SHIELD_Y = {-24, -24, 6, 24, 6};
 	private static final int[][] SPLAT_OFFSETS = {{0, 0}, {0, -20}, {-16, -10}, {16, -10}};
 
 	private final Client client;
@@ -76,6 +83,10 @@ class ArenaOverlay extends Overlay
 		double progress = session.progress();
 
 		renderTiles(graphics, session);
+		for (Prop prop : session.getEngine().getProps())
+		{
+			renderProp(graphics, session, prop);
+		}
 		for (ActorVisual visual : session.getVisuals().values())
 		{
 			renderActor(graphics, session, visual, progress);
@@ -215,6 +226,17 @@ class ArenaOverlay extends Overlay
 			graphics.setColor(HEALTH_GREEN);
 			graphics.fillRect(left, head.getY(), filled, HEALTH_BAR_HEIGHT);
 
+			String text = entity.getOverheadText();
+			if (text != null && session.getEngine().getTick() < entity.getOverheadTextUntilTick())
+			{
+				graphics.setFont(FontManager.getRunescapeBoldFont());
+				int textX = head.getX() - graphics.getFontMetrics().stringWidth(text) / 2;
+				graphics.setColor(Color.BLACK);
+				graphics.drawString(text, textX + 1, head.getY() - 7);
+				graphics.setColor(Color.YELLOW);
+				graphics.drawString(text, textX, head.getY() - 8);
+			}
+
 			if (entity instanceof PlayerEntity)
 			{
 				BufferedImage icon = plugin.headIcon(((PlayerEntity) entity).getPrayer());
@@ -278,8 +300,8 @@ class ArenaOverlay extends Overlay
 		{
 			return;
 		}
-		double[] from = ArenaView.centre(projectile.getSource(), progress);
-		double[] to = ArenaView.centre(projectile.getTarget(), progress);
+		double[] from = end(projectile.getSource(), projectile.getSourceTile(), progress);
+		double[] to = end(projectile.getTarget(), projectile.getTargetTile(), progress);
 		LocalPoint local = session.getView().toLocal(client,
 			from[0] + (to[0] - from[0]) * flown,
 			from[1] + (to[1] - from[1]) * flown,
@@ -288,8 +310,8 @@ class ArenaOverlay extends Overlay
 		{
 			return;
 		}
-		double fromHeight = heightOf(session, projectile.getSource()) * 0.6;
-		double toHeight = heightOf(session, projectile.getTarget()) * 0.5;
+		double fromHeight = projectile.getSource() == null ? PROP_HEIGHT : heightOf(session, projectile.getSource()) * 0.6;
+		double toHeight = projectile.getTarget() == null ? PROP_HEIGHT : heightOf(session, projectile.getTarget()) * 0.5;
 		int height = (int) (fromHeight + (toHeight - fromHeight) * flown);
 		Point point = Perspective.localToCanvas(client, local, session.getView().plane(), height);
 		if (point == null)
@@ -297,10 +319,44 @@ class ArenaOverlay extends Overlay
 			return;
 		}
 		graphics.setColor(new Color(projectile.getArgb(), true));
-		graphics.fillOval(point.getX() - 6, point.getY() - 6, 12, 12);
+		graphics.fillOval(point.getX() - 8, point.getY() - 8, 16, 16);
 		graphics.setColor(Color.BLACK);
 		graphics.setStroke(THIN);
-		graphics.drawOval(point.getX() - 6, point.getY() - 6, 12, 12);
+		graphics.drawOval(point.getX() - 8, point.getY() - 8, 16, 16);
+	}
+
+	/** One end of a projectile in arena coordinates: the entity if it has one, otherwise the tile. */
+	private static double[] end(Entity entity, Tile tile, double progress)
+	{
+		return entity != null ? ArenaView.centre(entity, progress) : new double[]{tile.getX(), tile.getY()};
+	}
+
+	/** Draws a prop as an upright shield: dim when unlit, coloured when lit, white while flashing. */
+	private void renderProp(Graphics2D graphics, ArenaSession session, Prop prop)
+	{
+		LocalPoint local = session.getView().toLocal(client, prop.getTile(), 1);
+		Point point = local == null ? null : Perspective.localToCanvas(client, local, session.getView().plane(), PROP_HEIGHT);
+		if (point == null)
+		{
+			return;
+		}
+		Polygon shield = new Polygon(SHIELD_X, SHIELD_Y, SHIELD_X.length);
+		shield.translate(point.getX(), point.getY());
+
+		boolean flashing = session.getEngine().getTick() < prop.getFlashUntilTick();
+		int rgb = prop.getArgb() & 0xFFFFFF;
+		Color fill = flashing ? Color.WHITE : new Color((prop.isLit() ? 0xE0000000 : 0x50000000) | rgb, true);
+		graphics.setColor(fill);
+		graphics.fill(shield);
+		graphics.setColor(prop.isLit() || flashing ? PROP_LIT_OUTLINE : PROP_OUTLINE);
+		graphics.setStroke(prop.isLit() || flashing ? new BasicStroke(3) : THICK);
+		graphics.draw(shield);
+
+		BufferedImage icon = prop.getIcon() == null ? null : plugin.prayerIcon(prop.getIcon());
+		if (icon != null)
+		{
+			graphics.drawImage(icon, point.getX() - icon.getWidth() / 2, point.getY() - icon.getHeight() / 2 - 3, null);
+		}
 	}
 
 	private static int heightOf(ArenaSession session, Entity entity)

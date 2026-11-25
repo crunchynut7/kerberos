@@ -31,6 +31,9 @@ public abstract class Entity
 	private int animation = -1;
 	/** Incremented each time an animation is requested, so the same animation can replay. */
 	private int animationSequence;
+	private String overheadText;
+	/** The first tick {@link #getOverheadText()} is no longer shown on. */
+	private int overheadTextUntilTick;
 
 	protected Entity(String name, int size, int maxHitpoints, Tile tile)
 	{
@@ -80,6 +83,13 @@ public abstract class Entity
 	{
 		int high = low + size - 1;
 		return Math.max(0, Math.max(low - value, value - high));
+	}
+
+	/** Shows text above the entity until the given tick. */
+	public void say(String text, int untilTick)
+	{
+		overheadText = text;
+		overheadTextUntilTick = untilTick;
 	}
 
 	/** Requests a one-off animation, such as an attack. */

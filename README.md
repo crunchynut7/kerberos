@@ -31,8 +31,12 @@ While the mouse is over the arena, world clicks are consumed and go to the arena
 - `com.bossarena.engine` is the fight simulation. It has no RuneLite dependencies, so it is covered
   by plain unit tests (`./gradlew test`).
 - `com.bossarena` draws the engine's state in the client and feeds it input.
-- `com.bossarena.encounters` holds the fights. `SparringGolemEncounter` is a placeholder that uses
-  every engine feature.
+- `com.bossarena.encounters` holds the fights. Pick one with the "Encounter" setting.
+  - `KerberosEncounter` is a memory fight: the boss shows a sequence of cues, pauses, then performs
+    the attacks in order. Head attacks travel down a lane and are stopped by that lane's shield
+    only while the matching protection prayer is up; slams cover the left or right four columns.
+    Its timings and damage are constants at the top of the class.
+  - `SparringGolemEncounter` is a simple placeholder for trying the engine out.
 
 ## What the engine supports
 
@@ -44,6 +48,7 @@ While the mouse is over the arena, world clicks are consumed and go to the arena
   prayers on the right tick matters. There is no prayer drain.
 - Tile hazards that warn, then damage whoever is standing on them
 - Hitsplats, health bars, death and victory
+- Props such as shields that light up and flash, overhead text, and projectiles between tiles
 - Scheduled tasks, boss movement and teleporting, and multiple bosses, for scripting mechanics
 
 Left out on purpose: gear, prayer points, special attack energy and line of sight.
@@ -51,5 +56,5 @@ Left out on purpose: gear, prayer points, special attack energy and line of sigh
 ## Adding a boss
 
 Implement `Encounter`: return an `Arena`, the player's `CombatStats`, and spawn bosses in `start`
-with a `BossBehaviour` that runs each tick. Then swap it in where `BossArenaPlugin.startArena`
-creates the encounter.
+with a `BossBehaviour` that runs each tick. Then add it to `EncounterChoice` so it appears in the
+"Encounter" setting.

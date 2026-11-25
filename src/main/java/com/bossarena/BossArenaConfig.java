@@ -13,6 +13,17 @@ public interface BossArenaConfig extends Config
 	String GROUP = "boss-arena";
 
 	@ConfigItem(
+		keyName = "encounter",
+		name = "Encounter",
+		description = "Which fight to start",
+		position = -1
+	)
+	default EncounterChoice encounter()
+	{
+		return EncounterChoice.KERBEROS;
+	}
+
+	@ConfigItem(
 		keyName = "toggleKey",
 		name = "Start / stop arena",
 		description = "Starts the fight around your character, or stops it if one is running",

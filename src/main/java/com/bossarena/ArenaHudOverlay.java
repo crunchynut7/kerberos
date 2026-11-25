@@ -31,7 +31,7 @@ class ArenaHudOverlay extends Overlay
 
 	private static final int PADDING = 6;
 	private static final int BUTTON = 40;
-	private static final int WIDTH = PADDING + PRAYERS.length * (BUTTON + PADDING);
+	private static final int WIDTH = Math.max(170, PADDING + PRAYERS.length * (BUTTON + PADDING));
 	private static final Color BUTTON_OFF = new Color(0, 0, 0, 120);
 	private static final Color BUTTON_ON = new Color(255, 255, 190, 130);
 
@@ -123,6 +123,11 @@ class ArenaHudOverlay extends Overlay
 		for (Boss boss : engine.getBosses())
 		{
 			lines.add(boss.getName() + ": " + boss.getHitpoints() + " / " + boss.getMaxHitpoints());
+		}
+		String status = engine.getEncounter().status();
+		if (status != null)
+		{
+			lines.add(status);
 		}
 		lines.add("Tick " + engine.getTick() + (engine.getPlayer().isRunning() ? " - run" : " - walk"));
 		if (engine.getState() == ArenaEngine.State.WON)

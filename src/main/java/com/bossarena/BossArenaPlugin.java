@@ -1,6 +1,5 @@
 package com.bossarena;
 
-import com.bossarena.encounters.SparringGolemEncounter;
 import com.bossarena.engine.ArenaEngine;
 import com.bossarena.engine.Boss;
 import com.bossarena.engine.Encounter;
@@ -185,7 +184,7 @@ public class BossArenaPlugin extends Plugin
 		}
 		loadIcons();
 
-		Encounter encounter = new SparringGolemEncounter();
+		Encounter encounter = config.encounter().create();
 		ArenaEngine engine = new ArenaEngine(encounter, System.nanoTime());
 		engine.setListener(new EngineListener()
 		{

@@ -18,6 +18,12 @@ public interface Encounter
 	/** Spawn bosses and set up anything else the fight needs. */
 	void start(ArenaEngine engine);
 
+	/** A short line for the status panel, such as the current phase, or null for none. */
+	default String status()
+	{
+		return null;
+	}
+
 	/** Called once per tick before boss behaviours, for fight-wide logic such as phases. */
 	default void tick(ArenaEngine engine)
 	{

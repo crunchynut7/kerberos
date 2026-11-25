@@ -8,6 +8,7 @@ import lombok.Value;
 /**
  * A set of tiles that warns for a while and then damages the player standing on them.
  * Used for things like falling rocks, floor fire or a sweeping beam.
+ * A hazard with a maximum damage of 0 hurts nothing and is just a coloured flash on the floor.
  */
 @Value
 @Builder

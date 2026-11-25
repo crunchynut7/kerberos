@@ -44,6 +44,7 @@ public class ArenaEngine
 	private final List<Boss> bosses = new ArrayList<>();
 	private final List<ActiveHazard> hazards = new ArrayList<>();
 	private final List<Projectile> projectiles = new ArrayList<>();
+	private final List<Prop> props = new ArrayList<>();
 	private final List<PendingHit> pendingHits = new ArrayList<>();
 	private final List<ScheduledTask> scheduled = new ArrayList<>();
 	private final List<Prayer> prayerClicks = new ArrayList<>();
@@ -133,7 +134,7 @@ public class ArenaEngine
 		pendingHits.add(new PendingHit(player, style, damage, landTick, check, protectedAtLaunch));
 		if (style != AttackStyle.MELEE && landTick > tick)
 		{
-			projectiles.add(new Projectile(source, player, style, tick, landTick, projectileColour(style)));
+			projectiles.add(new Projectile(source, null, player, null, tick, landTick, projectileColour(style)));
 		}
 	}
 
@@ -157,6 +158,24 @@ public class ArenaEngine
 		ActiveHazard active = new ActiveHazard(hazard, tick);
 		hazards.add(active);
 		return active;
+	}
+
+	/** Shows a projectile flying between two tiles. It is visual only. */
+	public void launchProjectile(Tile from, Tile to, int travelTicks, int argb)
+	{
+		projectiles.add(new Projectile(null, from, null, to, tick, tick + Math.max(1, travelTicks), argb));
+	}
+
+	/** Shows a projectile flying from a tile to an entity. It is visual only. */
+	public void launchProjectile(Tile from, Entity to, int travelTicks, int argb)
+	{
+		projectiles.add(new Projectile(null, from, to, null, tick, tick + Math.max(1, travelTicks), argb));
+	}
+
+	public Prop addProp(Prop prop)
+	{
+		props.add(prop);
+		return prop;
 	}
 
 	/** Runs a task a number of ticks from now, before the player moves on that tick. */
@@ -212,6 +231,11 @@ public class ArenaEngine
 	public List<ActiveHazard> getHazards()
 	{
 		return Collections.unmodifiableList(hazards);
+	}
+
+	public List<Prop> getProps()
+	{
+		return Collections.unmodifiableList(props);
 	}
 
 	public List<Projectile> getProjectiles()
@@ -410,7 +434,7 @@ public class ArenaEngine
 		pendingHits.add(new PendingHit(target, stats.getAttackStyle(), damage, landTick, PrayerCheck.ON_HIT, false));
 		if (stats.getAttackStyle() != AttackStyle.MELEE)
 		{
-			projectiles.add(new Projectile(player, target, stats.getAttackStyle(), tick, landTick,
+			projectiles.add(new Projectile(player, null, target, null, tick, landTick,
 				projectileColour(stats.getAttackStyle())));
 		}
 		if (stats.getAttackAnimation() != -1)
@@ -431,7 +455,7 @@ public class ArenaEngine
 				continue;
 			}
 			TileHazard hazard = active.getHazard();
-			if (active.isActive(tick) && hazard.getTiles().contains(player.getTile()))
+			if (hazard.getMaxDamage() > 0 && active.isActive(tick) && hazard.getTiles().contains(player.getTile()))
 			{
 				int spread = hazard.getMaxDamage() - hazard.getMinDamage();
 				applyDamage(player, hazard.getMinDamage() + (spread > 0 ? random.nextInt(spread + 1) : 0));
